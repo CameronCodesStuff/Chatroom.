@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Chatroom</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+        }
+
+        #chat-room {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #message-area {
+            width: 80%;
+            height: 80%;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            overflow-y: auto;
+            padding: 10px;
+            margin-top: 20px;
+        }
+
+        #message-input-container {
+            width: 80%;
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+
+        #message-input {
+            width: 85%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        #send-btn {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        #send-btn:hover {
+            background-color: #45a049;
+        }
+
+        .message {
+            padding: 8px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            background-color: #f1f1f1;
+            border: 1px solid #ddd;
+        }
+
+        .user {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .timestamp {
+            font-size: 0.8em;
+            color: #777;
+            margin-bottom: 5px;
+        }
+
+        #auth-container {
+            text-align: center;
+            padding: 20px;
+        }
+
+        #auth-container input {
+            padding: 8px;
+            margin: 5px;
+        }
+
+        #room-container {
+            text-align: center;
+        }
+
+        #join-room, #create-room {
+            padding: 10px 20px;
+            margin: 10px;
+            background-color: #008CBA;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        #join-room:hover, #create-room:hover {
+            background-color: #007B9E;
+        }
+
+    </style>
+</head>
+<body>
+    <div id="auth-container">
+        <h2>Enter your username</h2>
+        <input type="text" id="username-input" placeholder="Enter Username">
+        <br>
+        <button id="start-chat-btn">Start Chat</button>
+    </div>
+
+    <div id="room-container" style="display:none;">
+        <button id="create-room">Create Room</button>
+        <button id="join-room">Join Room</button>
+    </div>
+
+    <div id="chat-room" style="display:none;">
+        <h2>Chatroom: <span id="room-name"></span></h2>
+        <div id="message-area"></div>
+        <div id="message-input-container">
+            <input type="text" id="message-input" placeholder="Type a message...">
+            <button id="send-btn">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = new WebSocket('ws://your-websocket-server-url'); // Replace with your server URL
+        const usernameInput = document.getElementById('username-input');
+        const startChatBtn = document.getElementById('start-chat-btn');
+        const createRoomBtn = document.getElementById('create-room');
+        const joinRoomBtn = document.getElementById('join-room');
+        const roomContainer = document.getElementById('room-container');
+        const chatRoom = document.getElementById('chat-room');
+        const messageArea = document.getElementById('message-area');
+        const messageInput = document.getElementById('message-input');
+        const sendBtn = document.getElementById('send-btn');
+        const roomNameElem = document.getElementById('room-name');
+        let username = '';
+        let currentRoom = '';
+
+        startChatBtn.addEventListener('click', function() {
+            username = usernameInput.value.trim();
+            if (username !== '') {
+                document.getElementById('auth-container').style.display = 'none';
+                roomContainer.style.display = 'block';
+            }
+        });
+
+        createRoomBtn.addEventListener('click', function() {
+            const roomCode = generateRoomCode();
+            currentRoom = roomCode;
+            roomNameElem.textContent = roomCode;
+            socket.send(JSON.stringify({ type: 'create', room: roomCode, user: username }));
+            openChatRoom();
+        });
+
+        joinRoomBtn.addEventListener('click', function() {
+            const roomCode = prompt('Enter the room code:');
+            if (roomCode) {
+                socket.send(JSON.stringify({ type: 'join', room: roomCode, user: username }));
+                currentRoom = roomCode;
+                roomNameElem.textContent = roomCode;
+                openChatRoom();
+            }
+        });
+
+        socket.addEventListener('message', function(event) {
+            const messageData = JSON.parse(event.data);
+            if (messageData.room === currentRoom) {
+                displayMessage(messageData.user, messageData.message, messageData.timestamp);
+            }
+        });
+
+        sendBtn.addEventListener('click', function() {
+            sendMessage();
+        });
+
+        messageInput.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (message !== '') {
+                const timestamp = new Date().toLocaleTimeString();
+                const messageData = {
+                    user: username,
+                    message: message,
+                    room: currentRoom,
+                    timestamp: timestamp
+                };
+                socket.send(JSON.stringify(messageData));
+                messageInput.value = ''; // Clear the input
+            }
+        }
+
+        function displayMessage(user, message, timestamp) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            messageElement.innerHTML = `<div class="timestamp">${timestamp}</div><span class="user">${user}:</span> ${message}`;
+            messageArea.appendChild(messageElement);
+            messageArea.scrollTop = messageArea.scrollHeight; // Scroll to the bottom
+        }
+
+        function openChatRoom() {
+            document.getElementById('room-container').style.display = 'none';
+            chatRoom.style.display = 'block';
+        }
+
+        function generateRoomCode() {
+            return Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
+    </script>
+</body>
+</html>
